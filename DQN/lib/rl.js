@@ -1086,6 +1086,7 @@ DQNAgent.prototype = {
 
     return a;
   },
+  // DQN Learning Function
   learn: function(r1) {
     // perform an update on Q function
     if(!(this.r0 == null) && this.alpha > 0) {
