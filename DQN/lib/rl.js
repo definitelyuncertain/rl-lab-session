@@ -980,17 +980,16 @@ TDAgent.prototype = {
 
 
 var DQNAgent = function(env, opt) {
-    this.gamma = getopt(opt, 'gamma', 0.9); // future reward discount factor
-    this.epsilon = getopt(opt, 'epsilon', 0.2); // for epsilon-greedy policy
-    this.alpha = getopt(opt, 'alpha', 0.005); // value function learning rate
-    this.experience_add_every = getopt(opt, 'experience_add_every', 1); // number of time steps before we add another experience to replay memory
-    this.experience_size = getopt(opt, 'experience_size', 10000); // size of experience replay
-    this.learning_steps_per_iteration = getopt(opt, 'learning_steps_per_iteration', 5);
-    this.tderror_clamp = getopt(opt, 'tderror_clamp', 1.0);
-    this.network_freeze_duration = 20;
-    this.num_hidden_units =  getopt(opt, 'num_hidden_units', 100);
-    this.sampling_base_weight = getopt(opt, 'sampling_base_weight', 0.001); // Base weight for all experiences
-    this.sampling_exponent = getopt(opt, 'sampling_exponent', 0.7); // Exponent alpha used to compute weights
+  this.gamma = getopt(opt, 'gamma', 0.9); // future reward discount factor
+  this.epsilon = getopt(opt, 'epsilon', 0.2); // for epsilon-greedy policy
+  this.alpha = getopt(opt, 'alpha', 0.005); // value function learning rate
+  this.dis_exp_rep = getopt(opt, 'disable_experience_replay', false);
+  this.experience_add_every = getopt(opt, 'experience_add_every', 1); // number of time steps before we add another experience to replay memory
+  this.experience_size = getopt(opt, 'experience_size', 10000); // size of experience replay
+  this.learning_steps_per_iteration = getopt(opt, 'learning_steps_per_iteration', 5);
+  this.tderror_clamp = getopt(opt, 'tderror_clamp', 1.0);
+  this.network_freeze_duration = 20;
+  this.num_hidden_units =  getopt(opt, 'num_hidden_units', 100);
 
   this.env = env;
   this.reset();
@@ -1012,9 +1011,19 @@ DQNAgent.prototype = {
     this.net.W3 = new R.RandMat(this.na, this.nh, 0, 0.01);
     this.net.b3 = new R.Mat(this.na, 1, 0, 0.01);
 
+    this.net2 = {};
+    this.net2.W1 = new R.RandMat(this.nh, this.ns, 0, 0.01);
+    this.net2.b1 = new R.Mat(this.nh, 1, 0, 0.01);
+    this.net2.W2 = new R.RandMat(this.nh, this.nh, 0, 0.01);
+    this.net2.b2 = new R.Mat(this.nh, 1, 0, 0.01);
+    this.net2.W3 = new R.RandMat(this.na, this.nh, 0, 0.01);
+    this.net2.b3 = new R.Mat(this.na, 1, 0, 0.01);
+
     this.exp = []; // experience
-    this.expi = 0; // where to insert
     this.sampling_weights = [];
+    this.expi = 0; // where to insert
+    this.sampling_base_prob = 1e-3;
+    this.sampling_power = 0.7;
 
     this.t = 0;
 
@@ -1025,6 +1034,7 @@ DQNAgent.prototype = {
     this.a1 = null;
 
     this.tderror = 0; // for visualization only...
+    this.maxtderr = 0.0;
   },
   toJSON: function() {
     // save function
@@ -1043,14 +1053,14 @@ DQNAgent.prototype = {
     this.net = R.netFromJSON(j.net);
   },
   forwardQ: function(net, s, needs_backprop) {
-      var G = new R.Graph(needs_backprop);
-      var a1mat = G.add(G.mul(net.W1, s), net.b1);
-      var h1mat = G.tanh(a1mat);
-      var a2mat = G.add(G.mul(net.W2, h1mat), net.b2);
-      var h2mat = G.tanh(a2mat);
-      var a3mat = G.add(G.mul(net.W3, h2mat), net.b3);
-      this.lastG = G; // back this up. Kind of hacky isn't it
-      return a3mat;
+    var G = new R.Graph(needs_backprop);
+    var a1mat = G.add(G.mul(net.W1, s), net.b1);
+    var h1mat = G.tanh(a1mat);
+    var a2mat = G.add(G.mul(net.W2, h1mat), net.b2);
+    var h2mat = G.tanh(a2mat);
+    var a3mat = G.add(G.mul(net.W3, h2mat), net.b3);
+    this.net.lastG = G; // back this up. Kind of hacky isn't it
+    return a3mat;
   },
   act: function(slist) {
     // convert to a Mat column vector
@@ -1074,34 +1084,32 @@ DQNAgent.prototype = {
 
     return a;
   },
-  // DQN Learning Function
   learn: function(r1) {
     // perform an update on Q function
     if(!(this.r0 == null) && this.alpha > 0) {
-
         if (this.t % 1000 === 0)
-            console.log("Step "+this.t);
+            console.log("Step "+this.t+" Max TD error:" + this.maxtderr);
+
       // learn from this tuple to get a sense of how "surprising" it is to the agent
       var tderror = this.learnFromTuple(this.s0, this.a0, this.r0, this.s1, this.a1);
       this.tderror = tderror; // a measure of surprise
+      this.maxtderr = Math.max(Math.abs(tderror),this.maxtderr);
 
       // decide if we should keep this experience in the replay
-      if(this.t % this.experience_add_every === 0) {
+      if(this.t % this.experience_add_every === 0 && !this.dis_exp_rep) {
         this.exp[this.expi] = [this.s0, this.a0, this.r0, this.s1, this.a1, this.expi];
-        this.sampling_weights[this.expi] = Math.pow(Math.abs(tderror) + this.sampling_base_weight, this.sampling_exponent);
         this.expi += 1;
         if(this.expi > this.experience_size) { this.expi = 0; } // roll over when we run out
       }
-      this.t += 1;
 
+      this.t += 1;
       // sample some additional experience from replay memory and learn from it
+      if(!this.dis_exp_rep){
       for(var k=0;k<this.learning_steps_per_iteration;k++) {
-          // var ri = randi(0, this.exp.length); // todo: priority sweeps?
-          var e = chance.weighted(this.exp, this.sampling_weights);
-          // var e = this.exp[ri];
-          tderror = this.learnFromTuple(e[0], e[1], e[2], e[3], e[4]);
-          var ri = e[5];
-          this.sampling_weights[ri] = Math.pow(Math.abs(tderror) + this.sampling_base_weight, this.sampling_exponent);
+        var ri = randi(0, this.exp.length);
+        var e = this.exp[ri];
+        tderror = this.learnFromTuple(e[0], e[1], e[2], e[3], e[4]);
+      }
       }
     }
     this.r0 = r1; // store for next update
@@ -1123,7 +1131,7 @@ DQNAgent.prototype = {
       if(tderror < -clamp) tderror = -clamp;
     }
     pred.dw[a0] = tderror;
-    this.lastG.backward(); // compute gradients on net params
+    this.net.lastG.backward(); // compute gradients on net params
 
     // update net
     R.updateNet(this.net, this.alpha);
