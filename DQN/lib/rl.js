@@ -981,15 +981,17 @@ TDAgent.prototype = {
 
 var DQNAgent = function(env, opt) {
   this.gamma = getopt(opt, 'gamma', 0.9); // future reward discount factor
-  this.epsilon = getopt(opt, 'epsilon', 0.2); // for epsilon-greedy policy
-  this.alpha = getopt(opt, 'alpha', 0.005); // value function learning rate
-  this.dis_exp_rep = getopt(opt, 'disable_experience_replay', false);
-  this.experience_add_every = getopt(opt, 'experience_add_every', 1); // number of time steps before we add another experience to replay memory
-  this.experience_size = getopt(opt, 'experience_size', 10000); // size of experience replay
-  this.learning_steps_per_iteration = getopt(opt, 'learning_steps_per_iteration', 5);
-  this.tderror_clamp = getopt(opt, 'tderror_clamp', 1.0);
-  this.network_freeze_duration = 20;
-  this.num_hidden_units =  getopt(opt, 'num_hidden_units', 100);
+    this.epsilon = getopt(opt, 'epsilon', 0.2); // for epsilon-greedy policy
+    this.alpha = getopt(opt, 'alpha', 0.005); // value function learning rate
+    this.experience_add_every = getopt(opt, 'experience_add_every', 1); // number of time steps before we add another experience to replay memory
+    this.experience_size = getopt(opt, 'experience_size', 10000); // size of experience replay
+    this.learning_steps_per_iteration = getopt(opt, 'learning_steps_per_iteration', 5);
+    this.tderror_clamp = getopt(opt, 'tderror_clamp', 1.0);
+    this.network_freeze_duration = 20;
+    this.num_hidden_units =  getopt(opt, 'num_hidden_units', 100);
+    this.sampling_base_weight = getopt(opt, 'sampling_base_weight', 0.001); // Base weight for all experiences
+    this.sampling_exponent = getopt(opt, 'sampling_exponent', 0.7); // Exponent alpha used to compute weights
+
 
   this.env = env;
   this.reset();
@@ -1088,7 +1090,7 @@ DQNAgent.prototype = {
     // perform an update on Q function
     if(!(this.r0 == null) && this.alpha > 0) {
         if (this.t % 1000 === 0)
-            console.log("Step "+this.t+" Max TD error:" + this.maxtderr);
+            console.log("Step "+this.t);
 
       // learn from this tuple to get a sense of how "surprising" it is to the agent
       var tderror = this.learnFromTuple(this.s0, this.a0, this.r0, this.s1, this.a1);
