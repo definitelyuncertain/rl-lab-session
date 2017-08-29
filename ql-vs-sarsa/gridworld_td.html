@@ -179,7 +179,7 @@
         // gridworld is deterministic, so this is easy
         var ns = this.nextStateDistribution(s,a);
         var r = this.Rarr[s]; // observe the raw reward of being in s, taking a, and ending up in ns
-        // r -= 1; // every step takes a bit of negative reward
+        r -= 0.1; // every step takes a bit of negative reward
         var out = {'ns':ns, 'r':r};
         // if(s === 55 && ns === 0) {
         // if(s === this.goalS && ns === this.startS) 
@@ -348,7 +348,7 @@
             var vv = -1;
             for(var i=0,n=poss.length;i<n;i++) {
               var qsa = agent.Q[poss[i]*gs+s];
-              if(i === 0 || qsa > vv) { vv = qsa; }
+              if(i === 0 || qsa > vv) { vv = qsa; }   // display only max Q(s,a)
             }
           }
           
@@ -359,7 +359,7 @@
           //   if(i === 0 || qsa > vv) { vv = qsa; }
           // }
 
-          var ms = 100;
+          var ms = 10;
           if(vv > 0) { g = 255; r = 255 - vv*ms; b = 255 - vv*ms; }
           if(vv < 0) { g = 255 + vv*ms; r = 255; b = 255 + vv*ms; }
           var vcol = 'rgb('+Math.floor(r)+','+Math.floor(g)+','+Math.floor(b)+')';
@@ -448,6 +448,7 @@
 
             var a = agent.act(state); // ask agent for an action
             var obs = env.sampleNextState(state, a); // run it through environment dynamics
+            // if(obs.r === -100) {window.alert('Ouch');}
             agent.learn(obs.r); // allow opportunity for the agent to learn
             state = obs.ns; // evolve environment to next state
             nsteps_counter += 1;
@@ -530,7 +531,7 @@
         },
         yaxis: {
           min: 0,
-          max: 200
+          max: 100
         }
       });
 
@@ -658,7 +659,7 @@ spec.epsilon = 0.2; // initial epsilon for epsilon-greedy policy, [0, 1)
 spec.alpha = 0.1; // value function learning rate
 spec.lambda = 0; // eligibility trace decay, [0,1). 0 = no eligibility traces
 spec.replacing_traces = true; // use replacing or accumulating traces
-spec.planN = 50; // number of planning steps per iteration. 0 = no planning
+spec.planN = 5; // number of planning steps per iteration. 0 = no planning
 
 spec.smooth_policy_update = true; // non-standard, updates policy smoothly to follow max_a Q
 spec.beta = 0.1; // learning rate for smooth policy update
@@ -690,14 +691,14 @@ spec.beta = 0.1; // learning rate for smooth policy update
 
 ### Setup
 
-(*Copy-pasted from Dynamic Programming demo*). This is a toy environment called **Gridworld** that is often used as a toy model in the Reinforcement Learning literature. In this particular case:
-
-- **State space**: GridWorld has 10x10 = 100 distinct states. The start state is the top left cell. The gray cells are walls and cannot be moved to.
-- **Actions**: The agent can choose from up to 4 actions to move around. In this example 
+This gridworld example compares Sarsa and Q-learning, highlighting the difference between on-policy (Sarsa) and off-policy (Q-learning) methods. This is a standard episodic task, with a start and goal state, and the usual actions causing movement up, down, right, and left. It is also called a **CliffWorld**, with the grey cells being the 'cliff'. Falling down this cliff gives the agent a large negative reward and the resets it to the starting state. The optimal path is such that the agent needs to do a `cliff walk' by walking along the edge of the cliff.
+- **State space**: GridWorld has 5x10 = 50 distinct states. The start state is the bottom left cell, with the bottom right cell being the goal state. The grey cells are cliffs.
+- **Actions**: The agent can choose from up to 4 actions to move around - up, down, left, right.
 - **Environment Dynamics**: GridWorld is deterministic, leading to the same new state given each state and action
-- **Rewards**: The agent receives +300 reward when reaches the goal state (the one that shows R 300.0). On reaching the grey cells, it falls down the cliff, gets a reward of -100, and resets to the start state. It receives -1 on all other cells.
+- **Rewards**: The agent receives +300 reward when reaches the goal state. On reaching the grey cells, it falls down the cliff, gets a reward of -100, and resets to the start state. **It receives -0.1 on all other cells.**
 
-In other words, this is a deterministic, finite Markov Decision Process (MDP) and as always the goal is to find an agent policy (shown here by arrows) that maximizes the future discounted reward. My favorite part is letting the agent find the optimal path, then suddenly change the reward of some cell with the slider and watch it struggle to reroute its policy.
+In other words, this is a deterministic, finite Markov Decision Process (MDP) and as always the goal is to find an agent policy (shown here by arrows) that maximizes the future discounted reward. 
+<!-- My favorite part is letting the agent find the optimal path, then suddenly change the reward of some cell with the slider and watch it struggle to reroute its policy. -->
 
 **Interface**. The color of the cells (initially all white) shows the current estimate of the Value (discounted reward) of that state, with the current policy. Note that you can select any cell and change its reward with the *Cell reward* slider.
 
